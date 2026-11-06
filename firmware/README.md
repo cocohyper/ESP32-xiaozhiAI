@@ -1,11 +1,15 @@
 # 固件目录说明
 
-本目录中的 `.bin`、固件压缩包及 SHA-256 清单均来自用户提供的原始工程，是 **v2.5.3 旧版构建产物**，不是本次后台升级后重新编译的固件。
+本目录包含从升级后源码重新编译的 ESP32-S3 固件（2026-11-06 15:47 UTC 构建）。
 
-本次修改了 `device/` 内的固件源码，但当前环境没有 ESP-IDF 工具链和连接的 ESP32 硬件，因此没有生成或宣称已验证的新固件。强制升级门禁、环境/结果上报等源码变更需要先在 ESP-IDF 6.1 环境重新编译，再进行硬件测试。
+- 版本：`v2.5.3`（源码 PROJECT_VER 未变；内容包含 React 管理后台配套的设备端修改）
+- 构建环境：ESP-IDF v6.1，target `esp32s3`，16MB Flash，`bread-compact-wifi` 板型
+- 本次源码改动：控制台设备令牌、OTA/WS 上报 `X-Console-Device-Token`、强制升级门禁、OTA 结果上报
 
-- `v2.5.3_bread-compact-wifi/`：原始 ESP32-S3 / 16MB Flash / bread-compact-wifi 构建。
-- `merged-binary.bin`：整片烧录镜像，不能上传为 OTA 应用固件。
-- `xiaozhi.bin`：原 v2.5.3 应用镜像；即使上传到管理后台，也不会自动获得本次源码改动。
+文件用途：
+- `v2.5.3_bread-compact-wifi/merged-binary.bin`：整片烧录镜像，**不能**作为 OTA 应用镜像
+- `v2.5.3_bread-compact-wifi/xiaozhi.bin`：应用镜像，可上传到管理后台/服务端用于 OTA
+- `v2.5.3_bread-compact-wifi/v2.5.3_bread-compact-wifi.zip`：官方发布压缩包
 
-子目录原说明中的部署日期、服务器和串口信息是原交付记录，不代表本次已连接该服务器或设备。
+> 已装 v2.5.3 的设备若要收到 OTA 推送，需要先把 `device/CMakeLists.txt` 的 `PROJECT_VER` 递增
+> （如 2.5.4）再次编译，并按 `{device_model}_{version}.bin` 命名后放入服务端 `backend/data/bin/`。
