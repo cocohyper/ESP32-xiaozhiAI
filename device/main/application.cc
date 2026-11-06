@@ -8,6 +8,7 @@
 #include "mcp_server.h"
 #include "mqtt_protocol.h"
 #include "settings.h"
+#include "serial_provision.h"
 #include "system_info.h"
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
@@ -178,6 +179,11 @@ void Application::Initialize() {
 
     // Start network asynchronously
     board.StartNetwork();
+
+#ifdef CONFIG_SERIAL_PROVISION_ENABLED
+    // Start UART serial WiFi provisioning (browser Web Serial tool).
+    SerialProvisionStart();
+#endif
 
     // Update the status bar immediately to show the network state
     display->UpdateStatusBar(true);

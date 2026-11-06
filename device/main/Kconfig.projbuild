@@ -22,6 +22,14 @@ config CONSOLE_DEVICE_TOKEN
         remain unavailable until the backend verifies a token. MQTT requires gateway
         support to forward this credential and remains guest-only without it.
 
+config SERIAL_PROVISION_ENABLED
+    bool "Enable UART serial WiFi provisioning (browser Web Serial tool)"
+    default y
+    help
+        Listen on UART0 (115200) for WIFICFG line commands so a browser page
+        using the Web Serial API can scan WiFi, save SSID/password and query
+        status. See docs/serial-wifi-provision.md and tools/serial-wifi-provision/.
+
 choice
     prompt "Flash Assets"
     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE

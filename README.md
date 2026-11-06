@@ -56,6 +56,12 @@ tail -f /home/dev/xiaozhi_backend.log
 - WebSocket: `ws://192.168.10.200:8000/xiaozhi/v1/`
 - DeepSeek key: `/etc/xiaozhi-backend.env` (`DEEPSEEK_API_KEY=sk-...`), restart service after change
 
+## Serial WiFi provisioning (firmware v2.5.4+)
+
+Connect the device by USB/UART, then open `tools/serial-wifi-provision/index.html`
+in Chrome/Edge (or run `start-local-server.ps1`) to pick the COM port, scan WiFi
+and save credentials. Protocol and troubleshooting: `docs/serial-wifi-provision.md`.
+
 ## Build firmware
 
 ```bash

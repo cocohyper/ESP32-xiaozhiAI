@@ -37,6 +37,7 @@ set(SOURCES "audio/audio_codec.cc"
             "system_info.cc"
             "application.cc"
             "ota.cc"
+            "serial_provision.cc"
             "settings.cc"
             "device_state_machine.cc"
             "assets.cc"
@@ -1201,6 +1202,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_psram
                         esp_netif
                         esp_eth
+                        esp_wifi
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi

@@ -2,6 +2,7 @@
 
 | File | Description |
 |---|---|
+| `serial-wifi-provision.md` | Browser Web Serial tool + UART protocol for WiFi provisioning (firmware v2.5.4) |
 | `console-deployment.md` | Chinese management console: startup, integration, Docker, verification |
 | `console-surface.md` | Console UI surface and page overview |
 | `feature-coverage.md` | Requirement list coverage and integration boundaries |

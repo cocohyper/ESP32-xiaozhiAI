@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小智 AI 设备串口配网工具</title>
+<style>
+  :root { --brand:#0f766e; --brand-dark:#115e59; --bg:#f6f8f8; --card:#ffffff; --line:#d8e1e0; --text:#1f2937; --muted:#6b7280; --ok:#16a34a; --err:#dc2626; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:linear-gradient(135deg, var(--brand), var(--brand-dark)); color:#fff; padding:20px 24px; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:6px 0 0; opacity:.85; font-size:13px; }
+  main { max-width:960px; margin:20px auto; padding:0 16px 40px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .card h2 { margin:0 0 12px; font-size:15px; color:var(--brand-dark); display:flex; align-items:center; gap:8px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button { border:0; border-radius:8px; padding:9px 16px; font-size:14px; cursor:pointer; background:var(--brand); color:#fff; }
+  button:hover:not(:disabled) { background:var(--brand-dark); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--brand-dark); border:1px solid var(--line); }
+  input, select { padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; min-width:220px; }
+  label { font-size:13px; color:var(--muted); display:block; margin-bottom:4px; }
+  .field { display:flex; flex-direction:column; gap:2px; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; background:#e5e7eb; color:#374151; }
+  .badge.ok { background:#dcfce7; color:#166534; }
+  .badge.err { background:#fee2e2; color:#991b1b; }
+  .hint { font-size:12px; color:var(--muted); line-height:1.6; }
+  .hint.warn { color:#b45309; background:#fffbeb; border:1px solid #fde68a; padding:10px 12px; border-radius:8px; }
+  #log { background:#0b1220; color:#d1e7dd; border-radius:10px; padding:12px; height:260px; overflow:auto; font-family:Consolas, "Courier New", monospace; font-size:12.5px; white-space:pre-wrap; word-break:break-all; }
+  #log .sys { color:#93c5fd; }
+  #log .ok { color:#86efac; }
+  #log .err { color:#fca5a5; }
+  #log .dim { color:#64748b; }
+  .status-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; margin-top:10px; }
+  .status-grid div { background:#f9fafb; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; }
+  .status-grid b { display:block; color:var(--muted); font-weight:500; font-size:12px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>小智 AI 设备串口配网工具</h1>
+  <p>在浏览器中选择设备串口（COM 口），扫描/输入 WiFi 并写入设备。无需安装串口助手。</p>
+</header>
+<main>
+  <div class="card">
+    <h2>① 连接设备</h2>
+    <div class="row">
+      <button id="btnConnect">选择串口并连接</button>
+      <button id="btnDisconnect" class="ghost" disabled>断开</button>
+      <span id="connBadge" class="badge">未连接</span>
+    </div>
+    <p class="hint" style="margin:10px 0 0">使用 Chrome / Edge 浏览器。连接前请关闭其他占用该串口的程序（串口监视器、烧录工具等）。</p>
+    <p class="hint warn" id="envWarn" style="display:none;margin-top:10px"></p>
+  </div>
+
+  <div class="card">
+    <h2>② 设备状态</h2>
+    <div class="row">
+      <button id="btnStatus" disabled>刷新状态</button>
+      <button id="btnPing" disabled class="ghost">测试通讯</button>
+    </div>
+    <div class="status-grid" id="statusGrid">
+      <div><b>WiFi 状态</b><span id="stConn">—</span></div>
+      <div><b>当前 SSID</b><span id="stSsid">—</span></div>
+      <div><b>IP 地址</b><span id="stIp">—</span></div>
+      <div><b>信号</b><span id="stRssi">—</span></div>
+      <div><b>配网模式</b><span id="stApMode">—</span></div>
+      <div><b>已保存网络</b><span id="stSaved">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ WiFi 配网</h2>
+    <div class="row" style="margin-bottom:12px">
+      <button id="btnScan" disabled>扫描附近 WiFi</button>
+      <span class="hint" id="scanState">未扫描</span>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <div class="field">
+        <label for="ssidSelect">从扫描结果选择</label>
+        <select id="ssidSelect" disabled><option value="">（先扫描或手动输入）</option></select>
+      </div>
+      <div class="field">
+        <label for="ssidInput">WiFi 名称（SSID）</label>
+        <input id="ssidInput" maxlength="32" placeholder="例如：TP-LINK_5G">
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <div class="field">
+        <label for="pwdInput">WiFi 密码</label>
+        <input id="pwdInput" type="password" maxlength="64" placeholder="无密码可留空">
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnSet" disabled>保存并连接 WiFi</button>
+      <button id="btnReset" disabled class="ghost">清除已保存 WiFi</button>
+    </div>
+    <p class="hint" style="margin:12px 0 0">保存后设备会立即尝试连接；成功后屏幕显示 WiFi 已连接，状态栏会显示 IP。</p>
+  </div>
+
+  <div class="card">
+    <h2>④ 通讯日志</h2>
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnClear" class="ghost">清空日志</button>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <footer>协议：WIFICFG 行命令（115200 8N1，UART0） · 固件需启用 CONFIG_SERIAL_PROVISION_ENABLED</footer>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const logBox = $("log");
+  const ui = {
+    connect: $("btnConnect"), disconnect: $("btnDisconnect"),
+    status: $("btnStatus"), ping: $("btnPing"),
+    scan: $("btnScan"), set: $("btnSet"), reset: $("btnReset"), clear: $("btnClear"),
+    ssidSelect: $("ssidSelect"), ssidInput: $("ssidInput"), pwdInput: $("pwdInput"),
+    connBadge: $("connBadge"), scanState: $("scanState"), envWarn: $("envWarn"),
+    stConn: $("stConn"), stSsid: $("stSsid"), stIp: $("stIp"),
+    stRssi: $("stRssi"), stApMode: $("stApMode"), stSaved: $("stSaved"),
+  };
+
+  let port = null;
+  let reader = null;
+  let keepReading = false;
+  let readLoopPromise = null;
+  let writeChain = Promise.resolve();
+  let lineBuffer = "";
+
+  function log(text, kind) {
+    const span = document.createElement("span");
+    span.className = kind || "";
+    span.textContent = text + "\n";
+    logBox.appendChild(span);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function setConnected(connected, label, kind) {
+    ui.connBadge.textContent = label || (connected ? "已连接" : "未连接");
+    ui.connBadge.className = "badge " + (kind || (connected ? "ok" : ""));
+    for (const key of ["status", "ping", "scan", "set", "reset"]) {
+      ui[key].disabled = !connected;
+    }
+    ui.ssidSelect.disabled = !connected;
+    ui.disconnect.disabled = !connected;
+    ui.connect.disabled = connected;
+    if (!connected) {
+      ui.ssidSelect.innerHTML = '<option value="">（先扫描或手动输入）</option>';
+    }
+  }
+
+  async function sendCommand(command, label) {
+    if (!port || !port.writable) {
+      log("串口未连接", "err");
+      return;
+    }
+    const line = command.endsWith("\n") ? command : command + "\n";
+    writeChain = writeChain.then(async () => {
+      const writer = port.writable.getWriter();
+      try {
+        await writer.write(new TextEncoder().encode(line));
+      } finally {
+        writer.releaseLock();
+      }
+    }).catch((err) => log("发送失败: " + err.message, "err"));
+    log("> " + (label || command.trim()), "sys");
+  }
+
+  function handleLine(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const index = trimmed.indexOf("WIFICFG:");
+    if (index < 0) {
+      log(trimmed, "dim");
+      return;
+    }
+    const payload = trimmed.slice(index + 7);
+    log("< " + payload, "ok");
+    const colon = payload.indexOf(":");
+    const type = colon >= 0 ? payload.slice(0, colon) : payload;
+    const data = colon >= 0 ? payload.slice(colon + 1) : "";
+    try {
+      switch (type) {
+        case "READY":
+          log("设备端串口配网模块已就绪", "ok");
+          break;
+        case "PONG":
+          log("通讯正常（PONG）", "ok");
+          break;
+        case "STATUS":
+          applyStatus(JSON.parse(data));
+          break;
+        case "SCAN":
+          applyScan(JSON.parse(data));
+          break;
+        case "OK":
+          log("WiFi 已保存，设备正在连接…", "ok");
+          ui.scanState.textContent = "已保存: " + (JSON.parse(data).ssid || "");
+          break;
+        case "CONNECTING":
+          log("设备正在连接 WiFi，请稍候…", "sys");
+          break;
+        case "RESET_OK":
+          log("已清除设备保存的 WiFi，设备即将重启进入配网模式", "ok");
+          break;
+        case "ERR":
+          log("设备返回错误: " + data, "err");
+          break;
+        case "HELP":
+          log("可用命令: " + data, "sys");
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      log("解析失败: " + err.message, "err");
+    }
+  }
+
+  function applyStatus(status) {
+    ui.stConn.textContent = status.connected ? "已连接" : "未连接";
+    ui.stSsid.textContent = status.ssid || "—";
+    ui.stIp.textContent = status.ip || "—";
+    ui.stRssi.textContent = (status.rssi === undefined || status.rssi === 0) ? "—" : status.rssi + " dBm";
+    ui.stApMode.textContent = status.config_mode ? ("配网模式 · AP " + (status.ap_ssid || "")) : "否";
+    ui.stSaved.textContent = (status.saved_ssids && status.saved_ssids.length) ? status.saved_ssids.join("、") : "（无）";
+  }
+
+  function applyScan(list) {
+    ui.scanState.textContent = "找到 " + list.length + " 个 WiFi";
+    ui.ssidSelect.innerHTML = '<option value="">（选择扫描到的 WiFi）</option>';
+    for (const item of list) {
+      const option = document.createElement("option");
+      option.value = item.ssid;
+      option.textContent = item.ssid + "  (" + item.rssi + " dBm)";
+      ui.ssidSelect.appendChild(option);
+    }
+  }
+
+  async function readLoop() {
+    while (keepReading && port && port.readable) {
+      reader = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          lineBuffer += new TextDecoder().decode(value);
+          let newline = lineBuffer.indexOf("\n");
+          while (newline >= 0) {
+            const line = lineBuffer.slice(0, newline).replace(/\r$/, "");
+            lineBuffer = lineBuffer.slice(newline + 1);
+            handleLine(line);
+            newline = lineBuffer.indexOf("\n");
+          }
+        }
+      } catch (err) {
+        if (keepReading) log("读取串口出错: " + err.message, "err");
+      } finally {
+        reader.releaseLock();
+        reader = null;
+      }
+    }
+  }
+
+  async function connect() {
+    if (!("serial" in navigator)) {
+      log("当前浏览器不支持 Web Serial API", "err");
+      return;
+    }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none", flowControl: "none" });
+      keepReading = true;
+      readLoopPromise = readLoop();
+      setConnected(true);
+      log("串口已打开（115200）", "ok");
+      await sendCommand("WIFICFG:PING", "PING");
+    } catch (err) {
+      log("打开串口失败: " + err.message, "err");
+      port = null;
+      setConnected(false);
+    }
+  }
+
+  async function disconnect() {
+    try {
+      keepReading = false;
+      if (reader) { try { await reader.cancel(); } catch (_) {} }
+      if (readLoopPromise) { await readLoopPromise.catch(() => {}); readLoopPromise = null; }
+      if (port) { await port.close(); }
+    } catch (err) {
+      log("关闭串口出错: " + err.message, "err");
+    } finally {
+      port = null;
+      setConnected(false);
+      log("串口已断开", "sys");
+    }
+  }
+
+  async function saveWifi() {
+    const ssid = ui.ssidInput.value.trim() || ui.ssidSelect.value.trim();
+    if (!ssid) {
+      log("请先填写或选择 WiFi 名称", "err");
+      return;
+    }
+    const payload = { ssid, password: ui.pwdInput.value };
+    await sendCommand("WIFICFG:SET:" + JSON.stringify(payload), "SET " + ssid);
+  }
+
+  async function resetWifi() {
+    if (!confirm("确定清除设备上保存的所有 WiFi 吗？设备会重启并进入配网模式。")) return;
+    await sendCommand("WIFICFG:RESET", "RESET");
+  }
+
+  ui.connect.addEventListener("click", connect);
+  ui.disconnect.addEventListener("click", disconnect);
+  ui.status.addEventListener("click", () => sendCommand("WIFICFG:STATUS", "STATUS"));
+  ui.ping.addEventListener("click", () => sendCommand("WIFICFG:PING", "PING"));
+  ui.scan.addEventListener("click", () => sendCommand("WIFICFG:SCAN", "SCAN"));
+  ui.set.addEventListener("click", saveWifi);
+  ui.reset.addEventListener("click", resetWifi);
+  ui.clear.addEventListener("click", () => { logBox.innerHTML = ""; });
+  ui.ssidSelect.addEventListener("change", () => { if (ui.ssidSelect.value) ui.ssidInput.value = ui.ssidSelect.value; });
+
+  if (!("serial" in navigator)) {
+    ui.envWarn.style.display = "block";
+    ui.envWarn.textContent =
+      "当前环境不可用：需要 Chrome/Edge 89+，并通过 https://、http://localhost 或本地文件（file://）打开本页面。" +
+      "如果你是从 http://192.168.10.200:8004 打开的，请改用本机目录里的 index.html 或 start-local-server.ps1 启动本地服务。";
+  }
+
+  setConnected(false);
+  log("等待连接设备串口…", "sys");
+})();
+</script>
+</body>
+</html>
