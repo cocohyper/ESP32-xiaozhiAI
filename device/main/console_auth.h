@@ -3,6 +3,7 @@
 
 #include "sdkconfig.h"
 #include "settings.h"
+#include "system_info.h"
 
 #include <string>
 
@@ -17,6 +18,21 @@ inline std::string GetConsoleDeviceToken() {
     }
 #endif
     return token;
+}
+
+// Fixed device identity: NVS wifi/device_id > build CONFIG_DEVICE_ID_OVERRIDE > WiFi MAC.
+inline std::string GetConsoleDeviceId() {
+    Settings settings("wifi", false);
+    auto pinned = settings.GetString("device_id");
+#ifdef CONFIG_DEVICE_ID_OVERRIDE
+    if (pinned.empty()) {
+        pinned = CONFIG_DEVICE_ID_OVERRIDE;
+    }
+#endif
+    if (pinned.empty()) {
+        return SystemInfo::GetMacAddress();
+    }
+    return pinned;
 }
 
 #endif  // CONSOLE_AUTH_H

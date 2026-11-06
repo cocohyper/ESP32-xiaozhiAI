@@ -107,7 +107,7 @@ bool WebsocketProtocol::OpenAudioChannel() {
     if (!console_token.empty()) {
         websocket_->SetHeader("X-Console-Device-Token", console_token.c_str());
     }
-    websocket_->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
+    websocket_->SetHeader("Device-Id", GetConsoleDeviceId().c_str());
     websocket_->SetHeader("Client-Id", Board::GetInstance().GetUuid().c_str());
 
     websocket_->OnData([this](const char* data, size_t len, bool binary) {

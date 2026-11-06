@@ -22,6 +22,15 @@ config CONSOLE_DEVICE_TOKEN
         remain unavailable until the backend verifies a token. MQTT requires gateway
         support to forward this credential and remains guest-only without it.
 
+config DEVICE_ID_OVERRIDE
+    string "Fixed device identity reported to server (optional)"
+    default ""
+    help
+        Overrides the Device-Id header used for OTA / WebSocket requests.
+        Leave empty to report the WiFi MAC address. A pinned identity keeps
+        the management console device record and its token stable across
+        firmwares. NVS wifi/device_id (serial provisioning) overrides this.
+
 config SERIAL_PROVISION_ENABLED
     bool "Enable UART serial WiFi provisioning (browser Web Serial tool)"
     default y
