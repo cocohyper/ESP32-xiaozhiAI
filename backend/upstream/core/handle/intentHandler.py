@@ -11,6 +11,7 @@ from core.handle.helloHandle import checkWakeupWords
 from plugins_func.register import Action, ActionResponse
 from core.handle.sendAudioHandle import send_stt_message
 from core.handle.reportHandle import enqueue_tool_report
+from core.console_bridge import should_route_console_chat
 from core.utils.util import remove_punctuation_and_length
 from core.providers.tts.dto.dto import TTSMessageDTO, SentenceType
 
@@ -28,6 +29,9 @@ async def handle_user_intent(conn: "ConnectionHandler", text):
     except (json.JSONDecodeError, TypeError):
         pass
 
+    if should_route_console_chat(conn, text):
+        return False
+
     # 检查是否有明确的退出命令
     _, filtered_text = remove_punctuation_and_length(text)
     if await check_direct_exit(conn, filtered_text):
@@ -36,6 +40,8 @@ async def handle_user_intent(conn: "ConnectionHandler", text):
     # 检查是否是唤醒词
     if await checkWakeupWords(conn, filtered_text):
         return True
+    if getattr(conn, "console_wakeup_pending", False):
+        return False
 
     if conn.intent_type == "function_call":
         # 使用支持function calling的聊天方法,不再进行意图分析

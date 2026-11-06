@@ -1,0 +1,23 @@
+# Run alongside the original compose file. Set CONSOLE_ADMIN_TOKEN first.
+services:
+  xiaozhi-deepseek:
+    environment:
+      XIAOZHI_CONSOLE_DB: /var/lib/xiaozhi-console/console.sqlite3
+    volumes:
+      - console-data:/var/lib/xiaozhi-console
+
+  xiaozhi-console:
+    build:
+      context: .
+      dockerfile: Dockerfile.console
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      CONSOLE_ADMIN_TOKEN: ${CONSOLE_ADMIN_TOKEN:?Set CONSOLE_ADMIN_TOKEN before starting the console}
+    ports:
+      - "127.0.0.1:8004:8004"
+    volumes:
+      - console-data:/data
+
+volumes:
+  console-data:

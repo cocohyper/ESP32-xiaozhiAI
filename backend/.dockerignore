@@ -1,8 +1,13 @@
 **
 !Dockerfile
+!Dockerfile.console
 !upstream/
 !upstream/**
+!console/
+!console/**
 !manage.py
 !upstream-version.json
 **/__pycache__
 **/*.pyc
+**/node_modules
+**/.vite

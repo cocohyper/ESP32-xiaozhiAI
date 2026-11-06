@@ -26,4 +26,13 @@ backend/models/
 backend/upstream/tmp/
 archive/
 
-小智AI-React后台升级版-20261106.zip
+# Root-level uploaded packages
+/*.zip
+
+# React console development dependencies / local design tooling
+backend/console/frontend/node_modules/
+backend/console/frontend/.vite/
+.impeccable/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

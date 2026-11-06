@@ -13,6 +13,7 @@ import subprocess
 import websockets
 import opuslib_next
 import numpy as np
+from core.console_bridge import apply_connection, capture_turn, prepare_turn, command_loop, ConsoleMemory
 
 from core.utils.util import (
     extract_json_from_string,
@@ -215,7 +216,7 @@ class ConnectionHandler:
             else:
                 self.client_ip = ws.remote_address[0]
             self.logger.bind(tag=TAG).info(
-                f"{self.client_ip} conn - Headers: {self.headers}"
+                f"{self.client_ip} conn - Device: {self.headers.get('device-id', '')} (credentials omitted)"
             )
 
             self.device_id = self.headers.get("device-id", None)
@@ -792,6 +793,8 @@ class ConnectionHandler:
         try:
             # 异步获取差异化配置
             await self._initialize_private_config_async()
+            if await asyncio.to_thread(apply_connection, self):
+                self.console_command_task = asyncio.create_task(command_loop(self))
             # 在线程池中初始化组件
             self.executor.submit(self._initialize_components)
         except Exception as e:
@@ -959,6 +962,9 @@ class ConnectionHandler:
     def _initialize_memory(self):
         if self.memory is None:
             return
+        if isinstance(self.memory, ConsoleMemory):
+            self.memory.init_memory(self.device_id, self.llm)
+            return
         """初始化记忆模块"""
         self.memory.init_memory(
             role_id=self.device_id,
@@ -1061,6 +1067,7 @@ class ConnectionHandler:
 
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
+            console_reply = prepare_turn(self, query)
             current_sentence_id = str(uuid.uuid4().hex)
             self.sentence_id = current_sentence_id  # 更新共享属性
             self.dialogue.put(Message(role="user", content=query))
@@ -1074,6 +1081,17 @@ class ConnectionHandler:
         else:
             # 递归调用时，使用当前的sentence_id
             current_sentence_id = self.sentence_id
+
+        if depth == 0 and console_reply:
+            self.dialogue.put(Message(role="assistant", content=console_reply))
+            self.tts.tts_text_queue.put(TTSMessageDTO(
+                sentence_id=current_sentence_id, sentence_type=SentenceType.MIDDLE,
+                content_type=ContentType.TEXT, content_detail=console_reply))
+            self.tts.tts_text_queue.put(TTSMessageDTO(
+                sentence_id=current_sentence_id, sentence_type=SentenceType.LAST,
+                content_type=ContentType.ACTION))
+            capture_turn(self, query, console_reply)
+            return
 
         # 设置最大递归深度，避免无限循环，可根据实际需求调整
         MAX_DEPTH = 5
@@ -1297,6 +1315,7 @@ class ConnectionHandler:
                             da_response = self._clean_response_garbage(da_response)
                             self.tts.store_tts_text(current_sentence_id, da_response)
                             self.dialogue.put(Message(role="assistant", content=da_response))
+                            capture_turn(self, query, da_response)
 
                     if not real_tool_calls:
                         if depth == 0:
@@ -1376,6 +1395,7 @@ class ConnectionHandler:
             text_buff = "".join(response_message)
             self.tts.store_tts_text(current_sentence_id, text_buff)
             self.dialogue.put(Message(role="assistant", content=text_buff))
+            capture_turn(self, query, text_buff)
 
         if depth == 0:
             self.tts.tts_text_queue.put(
@@ -1543,6 +1563,14 @@ class ConnectionHandler:
     async def close(self, ws=None):
         """资源清理方法"""
         try:
+            command_task = getattr(self, "console_command_task", None)
+            if command_task and not command_task.done():
+                command_task.cancel()
+                try:
+                    await command_task
+                except asyncio.CancelledError:
+                    pass
+            self.console_command_task = None
             # 清理 VAD 连接资源
             if (
                     hasattr(self, "vad")

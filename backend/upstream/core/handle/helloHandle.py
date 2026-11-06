@@ -87,6 +87,12 @@ async def checkWakeupWords(conn: "ConnectionHandler", text):
     else:
         return False
 
+    if getattr(conn, "console_greeting", None):
+        _, console_filtered = remove_punctuation_and_length(text)
+        if console_filtered in conn.config.get("wakeup_words", []):
+            conn.console_wakeup_pending = True
+        return False
+
     if not enable_wakeup_words_response_cache:
         return False
 

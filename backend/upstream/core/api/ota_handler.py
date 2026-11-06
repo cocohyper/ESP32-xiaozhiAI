@@ -12,6 +12,7 @@ from aiohttp import web
 from core.auth import AuthManager
 from core.utils.util import get_local_ip, get_vision_url
 from core.api.base_handler import BaseHandler
+from core.console_bridge import get_store, check_ota
 
 TAG = __name__
 
@@ -152,7 +153,7 @@ class OTAHandler(BaseHandler):
         try:
             data = await request.text()
             self.logger.bind(tag=TAG).debug(f"OTA请求方法: {request.method}")
-            self.logger.bind(tag=TAG).debug(f"OTA请求头: {request.headers}")
+            self.logger.bind(tag=TAG).debug("OTA headers received (credentials omitted)")
             self.logger.bind(tag=TAG).debug(f"OTA请求数据: {data}")
 
             device_id = request.headers.get("device-id", "")
@@ -339,6 +340,25 @@ class OTAHandler(BaseHandler):
             except Exception as e:
                 self.logger.bind(tag=TAG).error(f"检查固件版本时出错: {e}")
 
+            if os.environ.get("XIAOZHI_CONSOLE_DB"):
+                # Managed rollout replaces the legacy filename scan, including
+                # its empty result. Never bypass a rejected rollout.
+                return_json["firmware"] = {"version": device_version, "url": ""}
+                try:
+                    store = get_store()
+                    board_name = data_json.get("board", {}).get("name") or device_model
+                    device_token = request.headers.get("x-console-device-token", "")
+                    release = check_ota(store, device_id, data_json, device_version, board_name, device_token)
+                    if release:
+                        name = "console_" + release["upload_id"] + ".bin"
+                        download_url = get_vision_url(self.config).replace(
+                            "/mcp/vision/explain", "/xiaozhi/ota/download/" + name)
+                        return_json["firmware"] = {"version": release["version"], "url": download_url,
+                                                   "force": int(bool(release.get("force"))),
+                                                   "sha256": release.get("sha256", "")}
+                except Exception as exc:
+                    self.logger.bind(tag=TAG).error(f"Managed OTA unavailable: {type(exc).__name__}")
+
             response = web.Response(
                 text=json.dumps(return_json, separators=(",", ":")),
                 content_type="application/json",
@@ -390,9 +410,21 @@ class OTAHandler(BaseHandler):
                 raise web.HTTPBadRequest(text="invalid filename")
 
             file_path = os.path.join(self.bin_dir, fname)
+            allowed_root = self.bin_dir
+            if re.fullmatch(r"console_[a-f0-9]{32}\.bin", fname) and os.environ.get("XIAOZHI_CONSOLE_DB"):
+                store = get_store()
+                upload = store.get_upload(fname[8:-4])
+                if not upload or upload.get("kind") != "firmware":
+                    raise web.HTTPNotFound(text="file not found")
+                root = (store.data_dir / "uploads").resolve()
+                path = (root / upload["stored_name"]).resolve()
+                if path.parent != root or not path.is_file():
+                    raise web.HTTPNotFound(text="file not found")
+                file_path = str(path)
+                allowed_root = str(root)
             # ensure realpath is under bin_dir
             file_real = os.path.realpath(file_path)
-            bin_dir_real = os.path.realpath(self.bin_dir)
+            bin_dir_real = os.path.realpath(allowed_root)
             if (
                 not file_real.startswith(bin_dir_real + os.sep)
                 and file_real != bin_dir_real

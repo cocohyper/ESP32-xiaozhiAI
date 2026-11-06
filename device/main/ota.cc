@@ -1,6 +1,7 @@
 #include "ota.h"
 #include "system_info.h"
 #include "settings.h"
+#include "console_auth.h"
 #include "assets/lang_config.h"
 
 #include <freertos/FreeRTOS.h>
@@ -62,6 +63,12 @@ std::string Ota::GetCheckVersionUrl() {
     return url;
 }
 
+bool Ota::IsUpgradeRequired() {
+    Settings settings("ota_mgmt", false);
+    auto required = settings.GetString("required_ver");
+    return !required.empty() && required != esp_app_get_description()->version;
+}
+
 std::unique_ptr<Http> Ota::SetupHttp() {
     auto& board = Board::GetInstance();
     auto network = board.GetNetwork();
@@ -77,6 +84,10 @@ std::unique_ptr<Http> Ota::SetupHttp() {
     http->SetHeader("User-Agent", user_agent);
     http->SetHeader("Accept-Language", Lang::CODE);
     http->SetHeader("Content-Type", "application/json");
+    auto console_token = GetConsoleDeviceToken();
+    if (!console_token.empty()) {
+        http->SetHeader("X-Console-Device-Token", console_token.c_str());
+    }
 
     return http;
 }
@@ -101,6 +112,29 @@ NetworkResult<> Ota::CheckVersion() {
     auto http = SetupHttp();
 
     std::string data = board.GetSystemInfoJson();
+    // Add optional management metadata without changing the existing OTA fields.
+    if (auto report = cJSON_Parse(data.c_str())) {
+        auto status = cJSON_Parse(board.GetDeviceStatusJson().c_str());
+        if (status) {
+            cJSON_AddItemToObject(report, "device_status", status);
+        }
+        Settings management("ota_mgmt", true);
+        auto target = management.GetString("target_ver");
+        auto result = management.GetString("result");
+        if (!target.empty() && target == current_version_ && result == "installed") {
+            result = "booted";
+            management.SetString("result", result);
+            management.EraseKey("required_ver");
+        }
+        auto ota_result = cJSON_AddObjectToObject(report, "ota_result");
+        cJSON_AddStringToObject(ota_result, "status", result.c_str());
+        cJSON_AddStringToObject(ota_result, "target_version", target.c_str());
+        if (auto encoded = cJSON_PrintUnformatted(report)) {
+            data.assign(encoded);
+            cJSON_free(encoded);
+        }
+        cJSON_Delete(report);
+    }
     std::string method = data.length() > 0 ? "POST" : "GET";
     http->SetContent(std::move(data));
 
@@ -235,7 +269,9 @@ NetworkResult<> Ota::CheckVersion() {
             firmware_url_ = url->valuestring;
         }
 
-        if (cJSON_IsString(version) && cJSON_IsString(url)) {
+        const bool valid_url = firmware_url_.starts_with("https://") ||
+                               firmware_url_.starts_with("http://");
+        if (cJSON_IsString(version) && cJSON_IsString(url) && valid_url) {
             // Check if the version is newer, for example, 0.1.0 is newer than 0.0.1
             has_new_version_ = IsNewVersionAvailable(current_version_, firmware_version_);
             if (has_new_version_) {
@@ -246,7 +282,11 @@ NetworkResult<> Ota::CheckVersion() {
             // If the force flag is set to 1, the given version is forced to be installed
             cJSON *force = cJSON_GetObjectItem(firmware, "force");
             if (cJSON_IsNumber(force) && force->valueint == 1) {
-                has_new_version_ = true;
+                has_new_version_ = current_version_ != firmware_version_;
+                if (has_new_version_) {
+                    Settings management("ota_mgmt", true);
+                    management.SetString("required_ver", firmware_version_);
+                }
             }
         }
     } else {
@@ -308,8 +348,8 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
     }
 
     size_t content_length = http->GetBodyLength();
-    if (content_length == 0) {
-        ESP_LOGE(TAG, "Failed to get content length");
+    if (content_length == 0 || content_length > update_partition->size) {
+        ESP_LOGE(TAG, "Invalid firmware length for the OTA partition");
         return false;
     }
 
@@ -328,6 +368,9 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         if (!ret) {
             ESP_LOGE(TAG, "Failed to read HTTP data: %s", ret.error().ToString().c_str());
             heap_caps_free(buffer);
+            if (image_header_checked) {
+                esp_ota_abort(update_handle);
+            }
             return false;
         }
         int n = *ret;
@@ -335,6 +378,13 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         // Calculate speed and progress every second
         recent_read += n;
         total_read += n;
+        if (total_read > content_length) {
+            if (image_header_checked) {
+                esp_ota_abort(update_handle);
+            }
+            heap_caps_free(buffer);
+            return false;
+        }
         buffer_offset += n;
         if (esp_timer_get_time() - last_calc_time >= 1000000 || n == 0) {
             size_t progress = total_read * 100 / content_length;
@@ -347,7 +397,7 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         }
 
         if (!image_header_checked) {
-            image_header.append(buffer, buffer_offset);
+            image_header.append(buffer + buffer_offset - n, n);
             if (image_header.size() >= sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)) {
                 esp_app_desc_t new_app_info;
                 memcpy(&new_app_info, image_header.data() + sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), sizeof(esp_app_desc_t));
@@ -367,6 +417,10 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         // Write to flash when buffer is full (4KB) or it's the last chunk
         bool is_last_chunk = (n == 0);
         if (buffer_offset == PAGE_SIZE || (is_last_chunk && buffer_offset > 0)) {
+            if (!image_header_checked) {
+                heap_caps_free(buffer);
+                return false;
+            }
             auto err = esp_ota_write(update_handle, buffer, buffer_offset);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to write OTA data: %s", esp_err_to_name(err));
@@ -384,6 +438,14 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
     }
     http->Close();
     heap_caps_free(buffer);
+
+    if (!image_header_checked || total_read != content_length) {
+        if (image_header_checked) {
+            esp_ota_abort(update_handle);
+        }
+        ESP_LOGE(TAG, "Incomplete firmware download");
+        return false;
+    }
 
     esp_err_t err = esp_ota_end(update_handle);
     if (err != ESP_OK) {

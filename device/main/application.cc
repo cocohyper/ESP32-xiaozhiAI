@@ -388,7 +388,14 @@ void Application::ActivationTask() {
     CheckAssetsVersion();
 
     // Check for new firmware version
-    CheckNewVersion();
+    do {
+        CheckNewVersion();
+        if (Ota::IsUpgradeRequired()) {
+            Schedule([this]() { SetDeviceState(kDeviceStateActivating); });
+            ESP_LOGW(TAG, "Required update is incomplete; service remains gated");
+            vTaskDelay(pdMS_TO_TICKS(60000));
+        }
+    } while (Ota::IsUpgradeRequired());
 
     // Initialize the protocol
     InitializeProtocol();
@@ -519,7 +526,9 @@ void Application::CheckNewVersion() {
             if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
                 return;  // This line will never be reached after reboot
             }
-            // If upgrade failed, continue to normal operation
+            if (Ota::IsUpgradeRequired()) {
+                return;  // ActivationTask retries; do not open the normal service.
+            }
         }
 
         // No new version, mark the current version as valid
@@ -1304,6 +1313,11 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
 
     std::string upgrade_url = url;
     std::string version_info = version.empty() ? "(Manual upgrade)" : version;
+    {
+        Settings management("ota_mgmt", true);
+        management.SetString("target_ver", version);
+        management.SetString("result", "downloading");
+    }
 
     if (GetDeviceState() == kDeviceStateNotifying) {
         StopNotification();
@@ -1338,6 +1352,10 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     });
 
     if (!upgrade_success) {
+        {
+            Settings management("ota_mgmt", true);
+            management.SetString("result", "failed");
+        }
         // Upgrade failed, restart audio service and continue running
         ESP_LOGE(TAG,
                  "Firmware upgrade failed, restarting audio service and continuing operation...");
@@ -1348,6 +1366,10 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
         vTaskDelay(pdMS_TO_TICKS(3000));
         return false;
     } else {
+        {
+            Settings management("ota_mgmt", true);
+            management.SetString("result", "installed");
+        }
         // Upgrade success, reboot immediately
         ESP_LOGI(TAG, "Firmware upgrade successful, rebooting...");
         display->SetChatMessage("system", "Upgrade successful, rebooting...");

@@ -2,6 +2,13 @@
 
 | File | Description |
 |---|---|
+| `console-deployment.md` | Chinese management console: startup, integration, Docker, verification |
+| `console-surface.md` | Console UI surface and page overview |
+| `feature-coverage.md` | Requirement list coverage and integration boundaries |
+| `feature-list.md` | Original user requirement list (功能清单) |
+| `upgrade-delivery.md` | React console upgrade delivery notes |
+| `upgrade-changed-files.txt` | Files changed by the console upgrade |
+| `validation-results.json` | Automated validation results |
 | `backend-native-deployment.md` | Native Python backend deployment on Ubuntu (systemd, no Docker) |
 | `docker-deployment-progress.md` | Docker deployment progress and notes (paused) |
 | `deepseek-deployment-guide.md` | Original DeepSeek backend delivery guide |

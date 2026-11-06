@@ -27,6 +27,7 @@ THINKING_DISABLED_MODEL_EXCLUSIONS = {
 
 class LLMProvider(LLMProviderBase):
     def __init__(self, config):
+        self.usage_callback = config.get("_console_usage")
         self.model_name = config.get("model_name")
         # 可选实例级思考强度: off/disabled/none/disable | low/medium/high | 空/其他=按域名默认
         self.thinking_mode = str(config.get("thinking") or "").strip().lower()
@@ -125,6 +126,8 @@ class LLMProvider(LLMProviderBase):
             "messages": dialogue,
             "stream": True,
         }
+        if self.usage_callback:
+            request_params["stream_options"] = {"include_usage": True}
 
         # 添加可选参数,只有当参数不为None时才添加
         optional_params = {
@@ -146,6 +149,7 @@ class LLMProvider(LLMProviderBase):
         is_active = True
         try:            
             for chunk in responses:
+                self._report_usage(chunk)
                 try:
                     delta = chunk.choices[0].delta if getattr(chunk, "choices", None) else None
                     content = getattr(delta, "content", "") if delta else ""
@@ -172,6 +176,8 @@ class LLMProvider(LLMProviderBase):
             "stream": True,
             "tools": functions,
         }
+        if self.usage_callback:
+            request_params["stream_options"] = {"include_usage": True}
 
         optional_params = {
             "max_tokens": kwargs.get("max_tokens", self.max_tokens),
@@ -191,6 +197,7 @@ class LLMProvider(LLMProviderBase):
 
         try:
             for chunk in stream:
+                self._report_usage(chunk)
                 if getattr(chunk, "choices", None):
                     delta = chunk.choices[0].delta
                     content = getattr(delta, "content", "")
@@ -205,3 +212,10 @@ class LLMProvider(LLMProviderBase):
                     )
         finally:
             stream.close()
+
+    def _report_usage(self, chunk):
+        usage = getattr(chunk, "usage", None)
+        if self.usage_callback and usage is not None:
+            self.usage_callback({"input_tokens": getattr(usage, "prompt_tokens", 0),
+                                 "output_tokens": getattr(usage, "completion_tokens", 0),
+                                 "total_tokens": getattr(usage, "total_tokens", 0)})

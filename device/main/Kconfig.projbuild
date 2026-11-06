@@ -10,6 +10,18 @@ config OTA_URL
         Keep the DeepSeek API key in backend/data/.config.yaml, never in firmware.
         Existing sdkconfig or NVS ota_url values override this default; see docs/deepseek_setup_zh.txt.
 
+config CONSOLE_DEVICE_TOKEN
+    string "Per-device management console token (optional)"
+    default ""
+    help
+        Use the unique device token issued by the management console.
+        NVS wifi/console_token overrides this build default.
+        Never put a model provider API key here or share a token across devices.
+        Configure HTTPS OTA and WSS when sending a credential over untrusted networks.
+        Empty keeps legacy firmware behavior; private memory and management commands
+        remain unavailable until the backend verifies a token. MQTT requires gateway
+        support to forward this credential and remains guest-only without it.
+
 choice
     prompt "Flash Assets"
     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE

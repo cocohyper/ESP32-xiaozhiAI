@@ -53,7 +53,7 @@ class DeploymentTests(unittest.TestCase):
             config_path, kconfig_path = Path(tmp) / ".config.yaml", Path(tmp) / "Kconfig.projbuild"
             source = (ROOT / "config.example.yaml").read_text(encoding="utf-8").replace(manage.KEY_PLACEHOLDER, "sk-preserve-test-key")
             config_path.write_text(source, encoding="utf-8")
-            original = (ROOT.parent / "main/Kconfig.projbuild").read_text(encoding="utf-8")
+            original = (ROOT.parent / "device/main/Kconfig.projbuild").read_text(encoding="utf-8")
             kconfig_path.write_text(original, encoding="utf-8")
             url = manage.configure_server("192.168.1.123", config_path, kconfig_path)
             self.assertEqual(url, "http://192.168.1.123:8003/xiaozhi/ota/")
@@ -73,7 +73,7 @@ class DeploymentTests(unittest.TestCase):
             config_path, kconfig_path = Path(tmp) / ".config.yaml", Path(tmp) / "Kconfig.projbuild"
             source = (ROOT / "config.example.yaml").read_text(encoding="utf-8").replace("  vision_explain:", "  renamed_field:")
             config_path.write_text(source, encoding="utf-8")
-            original = (ROOT.parent / "main/Kconfig.projbuild").read_text(encoding="utf-8")
+            original = (ROOT.parent / "device/main/Kconfig.projbuild").read_text(encoding="utf-8")
             kconfig_path.write_text(original, encoding="utf-8")
             with self.assertRaises(manage.SetupError):
                 manage.configure_server("192.168.1.123", config_path, kconfig_path)
@@ -162,7 +162,8 @@ class DeploymentTests(unittest.TestCase):
         handler = next(item for item in tree.body if isinstance(item, ast.ClassDef) and item.name == "OTAHandler")
         post = next(item for item in handler.body if isinstance(item, ast.AsyncFunctionDef) and item.name == "handle_post")
         get_url = next(item for item in handler.body if isinstance(item, ast.FunctionDef) and item.name == "_get_websocket_url")
-        namespace = {"json": json, "time": time, "TAG": "test", "get_local_ip": lambda: "172.17.0.2", "web": SimpleNamespace(Response=lambda **kw: SimpleNamespace(**kw))}
+        # This regression asserts standalone behavior, independent of the optional local console.
+        namespace = {"json": json, "time": time, "os": SimpleNamespace(environ={}), "TAG": "test", "get_local_ip": lambda: "172.17.0.2", "web": SimpleNamespace(Response=lambda **kw: SimpleNamespace(**kw))}
         exec(compile(ast.Module(body=[post, get_url], type_ignores=[]), "ota_handler", "exec"), namespace)
         config = self.ready_config()
         fake = SimpleNamespace(config=config, logger=MagicMock(), auth_enable=False, _bin_cache={}, _refresh_bin_cache_if_needed=lambda: None, _add_cors_headers=lambda response: None)

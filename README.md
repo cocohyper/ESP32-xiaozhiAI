@@ -1,5 +1,21 @@
 # XiaoZhi ESP32 + DeepSeek Backend
 
+## 新增中文管理后台
+
+```bash
+python backend/console/server.py --host 127.0.0.1 --port 8004 --data-dir backend/data/console
+```
+
+使用 Python 3.10+，管理后台本身仅依赖标准库。浏览器打开 <http://127.0.0.1:8004>。
+后台配置、上传文件和审计记录保存在 `backend/data/console`。首次使用为空数据，不包含虚构设备或运行指标。
+
+设备/语音服务接入、容器部署和测试步骤见 [后台部署说明](docs/console-deployment.md)；
+每项功能的实际覆盖和待接入项见 [功能清单验收对照](docs/feature-coverage.md)。
+上传固件须为 ESP 应用镜像，不能使用整片合并烧录镜像。当前交付未连接真实设备或调用付费模型/克隆服务。
+`firmware/` 中随原工程保留的 `.bin` 是旧版 v2.5.3，**不含本次源码修改**；见 [固件目录说明](firmware/README.md)。
+
+Repository layout (four categories):
+
 ```
 ESP32-xiaozhiAI/
 ├── backend/                          # 1) Backend service source (xiaozhi-esp32-server + DeepSeek)
@@ -36,8 +52,8 @@ sudo systemctl restart xiaozhi-backend
 tail -f /home/dev/xiaozhi_backend.log
 ```
 
-- OTA URL: `http://HOST_IP:8003/xiaozhi/ota/`
-- WebSocket: `ws://HOST_IP:8000/xiaozhi/v1/`
+- OTA URL: `http://192.168.10.200:8003/xiaozhi/ota/`
+- WebSocket: `ws://192.168.10.200:8000/xiaozhi/v1/`
 - DeepSeek key: `/etc/xiaozhi-backend.env` (`DEEPSEEK_API_KEY=sk-...`), restart service after change
 
 ## Build firmware
@@ -59,10 +75,3 @@ cd firmware\v2.5.3_bread-compact-wifi
 ```
 
 See `firmware/v2.5.3_bread-compact-wifi/README.txt` and `docs/backend-native-deployment.md`.
-
-## Security
-
-- No private API keys are stored in this repository.
-- Runtime secrets (DeepSeek API key) live outside the repo: `/etc/xiaozhi-backend.env` (root-only, 0600).
-- `.gitignore` excludes runtime config (`backend/data/`), ASR models (`backend/models/`), virtual environments and backups.
-- Third-party demo/share keys from upstream source (e.g. QWeather shared key in `upstream/config.yaml`) are replaced with placeholders (`YOUR_...`).

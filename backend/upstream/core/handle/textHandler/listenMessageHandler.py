@@ -104,6 +104,8 @@ class ListenTextMessageHandler(TextMessageHandler):
                     await send_tts_message(conn, "stop", None)
                     conn.client_is_speaking = False
                 elif is_wakeup_words:
+                    if getattr(conn, "console_greeting", None):
+                        conn.console_wakeup_pending = True
                     conn.just_woken_up = True
                     # 上报纯文字数据（复用ASR上报功能，但不提供音频数据）
                     enqueue_asr_report(conn, "嘿，你好呀", [])
