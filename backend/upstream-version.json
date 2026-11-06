@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/xinnan-tech/xiaozhi-esp32-server",
+  "commit": "4f6e9ec6b1169ac6f3dbd78b5d8b1f717e493b9b",
+  "source_subdirectory": "main/xiaozhi-server",
+  "archive_sha256": "34a45accb2c3d0f633922ddbb24f1326fe49895255f10d9ccd7ebaf470072768",
+  "base_image": "ghcr.io/xinnan-tech/xiaozhi-esp32-server@sha256:c94ab84085f843a2c329019ff77cffca7bc3832e4cf55878ef8cb613985d4f37",
+  "model_url": "https://modelscope.cn/models/iic/SenseVoiceSmall/resolve/master/model.pt",
+  "model_sha256": "833ca2dcfdf8ec91bd4f31cfac36d6124e0c459074d5e909aec9cabe6204a3ea",
+  "upstream_files": 241,
+  "license": "MIT",
+  "local_patches": [
+    {
+      "path": "core/api/ota_handler.py",
+      "description": "Explicit websocket.version=1 to overwrite retained device NVS protocol versions."
+    }
+  ]
+}

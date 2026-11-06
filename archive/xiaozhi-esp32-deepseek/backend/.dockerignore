@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!upstream/
+!upstream/**
+!manage.py
+!upstream-version.json
+**/__pycache__
+**/*.pyc

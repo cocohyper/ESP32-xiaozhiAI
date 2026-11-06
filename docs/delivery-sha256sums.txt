@@ -1,0 +1,3 @@
+5c2b2e6aad8447eba9fa6e92c59e4d9b1318ea8467f4c1c33cfc314d06ad9a92  archive/xiaozhi-esp32-deepseek.zip
+31f4f90c99cfdfa2d2cdbb1c36fd8b9db5360b30e9faf83049ca4959b9a8a637  DeepSeek_完整部署说明.txt
+33c8cb2197dd66343b71a504ce2fcdd3969a118cef0c058ef1801de630ec1738  DeepSeek_验证记录.txt

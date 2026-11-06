@@ -1,0 +1,26 @@
+# Python / virtual environments
+.venv-server/
+.venv-tools/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Backups / temp / logs
+backups/
+restore_zip_tmp/
+*.log
+
+# Firmware source build artifacts
+device/managed_components/
+device/build/
+device/releases/
+device/sdkconfig
+device/sdkconfig.old
+device/dependencies.lock
+
+# Backend runtime data / models
+backend/data/
+backend/models/
+backend/upstream/tmp/

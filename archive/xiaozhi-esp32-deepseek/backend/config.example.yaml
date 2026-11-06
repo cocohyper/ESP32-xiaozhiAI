@@ -1,0 +1,72 @@
+# 【用户填写密钥的文件】backend/data/.config.yaml
+# 将下方 api_key 的 DEEPSEEK_API_KEY 替换为你的密钥。
+# 保留英文引号。不要把密钥填进 ESP32 固件或 WebSocket token。
+# server 地址可用 python backend/manage.py configure --host 192.168.1.100 同步。
+server:
+  ip: "0.0.0.0"
+  port: 8000
+  http_port: 8003
+  websocket: "ws://YOUR_SERVER_IP:8000/xiaozhi/v1/"
+  vision_explain: "http://YOUR_SERVER_IP:8003/mcp/vision/explain"
+  timezone_offset: 8
+  auth:
+    # 局域网单机部署；不要直接把这两个端口映射到公网。
+    enabled: false
+    allowed_devices: []
+  mqtt_gateway: null
+  mqtt_signature_key: null
+  udp_gateway: null
+
+# 使用本地覆盖配置，不从另一个管理后台取模型设置。
+manager-api:
+  url: ""
+  secret: ""
+read_config_from_api: false
+
+selected_module:
+  VAD: SileroVAD
+  ASR: FunASR
+  LLM: DeepSeekLLM
+  # DeepSeek 当前接入的是文本对话；视觉模型不在本次配置范围内。
+  VLLM: null
+  TTS: EdgeTTS
+  Memory: nomem
+  Intent: function_call
+
+LLM:
+  DeepSeekLLM:
+    type: openai
+    base_url: "https://api.deepseek.com/v1"
+    model_name: "deepseek-v4-flash"
+    api_key: "DEEPSEEK_API_KEY"  # <<< 在这里填写 DeepSeek 密钥
+    thinking: "off"
+    max_tokens: 512
+    timeout:
+      connect: 10
+      read: 60
+      write: 10
+      pool: 5
+
+ASR:
+  FunASR:
+    type: fun_local
+    model_dir: models/SenseVoiceSmall
+    output_dir: tmp/
+    language: zh
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: zh-CN-XiaoxiaoNeural
+    output_dir: tmp/
+Memory:
+  nomem:
+    type: nomem
+Intent:
+  function_call:
+    type: function_call
+    functions: []
+
+# 唤醒响应实时使用所选 TTS，避免依赖上游预置的其他模型配置。
+enable_wakeup_words_response_cache: false
+delete_audio: true
+prompt: "你是小智，一位友好、可靠的中文语音助手。回答简洁自然，适合朗读。"

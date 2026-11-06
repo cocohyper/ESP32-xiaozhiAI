@@ -1,0 +1,260 @@
+小智 ESP32 + DeepSeek 自建后台：配置与部署完整说明
+交付日期：2026-11-05
+
+一、这次交付做了什么
+
+你提供的 xiaozhi-esp32-main.zip 是设备固件，没有后台服务器源码。
+按你确认的“没有现成后台，补上自建后台部署配置”，本版本在原固件内新增
+backend/，包含可部署的 Python 后台源码、Docker 部署文件和配置工具。
+
+实际通信链路：
+ESP32 麦克风 → 自建后台（Opus、语音识别）→ DeepSeek 文本对话 API
+→ 后台 EdgeTTS 语音合成 → ESP32 扬声器。
+
+后台对话接口已经设置为：https://api.deepseek.com/v1
+实际请求路径为：https://api.deepseek.com/v1/chat/completions
+默认模型：deepseek-v4-flash；关闭思考模式，使用流式输出，保留设备工具调用。
+模型名在交付当天依据 DeepSeek 官方文档和上游适配器核对；可在配置文件调整。
+DeepSeek 负责文字对话，语音识别使用本地 SenseVoiceSmall，合成使用联网 EdgeTTS。
+
+交付的是源码和部署配置。仍需你填写真实密钥、服务器地址，下载 ASR 模型并启动服务。
+本次未在你的电脑上安装 Docker、部署运行服务或烧录设备。
+本部署是局域网单机服务，没有另建网页“智控台”；模型参数通过配置文件管理。
+
+二、最重要：你要填写哪一个文件
+
+【唯一需要填写真实 DeepSeek API Key 的运行配置文件】
+  backend/data/.config.yaml
+
+找到下面这一段，仅替换 api_key 的占位符，保留英文引号：
+
+  LLM:
+    DeepSeekLLM:
+      type: openai
+      base_url: "https://api.deepseek.com/v1"
+      model_name: "deepseek-v4-flash"
+      api_key: "DEEPSEEK_API_KEY"
+
+文件内已经用中文注释和箭头标明填写位置。
+密钥申请入口：https://platform.deepseek.com/
+后台使用 OpenAI 兼容协议连接 DeepSeek，不需要 OpenAI 账号或 OpenAI 密钥。
+不要在 ESP32 固件、CONFIG_OTA_URL、WebSocket token 中填写 DeepSeek 密钥。
+不要修改 backend/upstream/config.yaml 中的其他厂商密钥字段。
+backend/config.example.yaml 是无真实密钥的恢复模板，运行时不读取它。
+本地真实配置文件已加入 .gitignore；这不能保护你主动复制或分享的压缩包。
+填写密钥后，请不要直接把含此文件的项目压缩包发给别人。
+
+三、部署前准备
+
+1. 一台与 ESP32 能互通的电脑或 Linux 主机，使用固定局域网 IP 最方便。
+   推荐至少 8GB 内存，为 Docker 镜像、模型及缓存预留 15GB 以上磁盘空间。
+   Windows 使用 Docker Desktop 的 Linux 容器模式和 Docker Compose V2。
+   本后台支持的 CPU 架构取决于所固定基础镜像，常见 amd64/arm64 可用。
+2. 配置工具需要 Python 3.10 或更高版本。以下 python 指向你自己安装的 Python。
+3. 后台需能访问 DeepSeek 和 EdgeTTS 服务；首次需要下载容器镜像及识别模型。
+   识别模型在本地运行，DeepSeek 对话和 EdgeTTS 仍需要互联网。
+4. 所有命令除特别说明外，均从解压后的 xiaozhi-esp32-main 项目根目录执行。
+   路径中有空格时，切换目录需要加引号。
+5. 安装工具依赖（只有 PyYAML；后台完整运行依赖已在容器基础镜像中）：
+
+   python -m pip install -r backend/requirements-tools.txt
+
+   如需隔离，可先创建 Python 虚拟环境，再用该环境内的 python 执行这些命令。
+
+四、配置地址和密钥
+
+1. 确定后台服务器在局域网里的 IP，例如 192.168.1.100。
+   这只是示例，请替换成实际部署机器的地址。
+   原压缩包所在的 192.168.10.12 是共享文件服务器，不能据此认定它运行后台。
+   不要填写 127.0.0.1、localhost、0.0.0.0 或 Docker 容器内部的 172.x 地址。
+
+2. 同步后台地址和固件的 OTA 默认地址：
+
+   python backend/manage.py configure --host 192.168.1.100
+
+   该命令会修改：
+   - backend/data/.config.yaml 的 server.websocket 和 server.vision_explain；
+   - main/Kconfig.projbuild 的 OTA_URL 默认值。
+   命令会保留密钥原文和配置注释，不会自动修改现有 sdkconfig 或设备 NVS。
+
+   配置完成后应分别是：
+   设备 OTA 地址：http://192.168.1.100:8003/xiaozhi/ota/
+   设备 WebSocket：ws://192.168.1.100:8000/xiaozhi/v1/
+   后台 DeepSeek：https://api.deepseek.com/v1
+   这三者用途不同，设备端应填写 OTA 地址。
+
+3. 打开 backend/data/.config.yaml，填写第二节标明的 DeepSeek API Key。
+   使用 UTF-8 保存；YAML 缩进使用空格。
+
+4. 先进行不依赖大模型文件的离线检查：
+
+   python backend/manage.py check --skip-model
+
+   未填写密钥、仍有 YOUR_SERVER_IP、使用无效主机地址、错误提供商或端口时会报错。
+   占位符被拦截是预期行为，不表示程序故障。
+   此检查只能确认本地配置格式，不能证明密钥有效或账号有余额。
+
+5. 可选：验证真实 DeepSeek 流式接口（会发送一次小额计费请求）：
+
+   python backend/manage.py test-api
+
+   成功时应输出“DeepSeek 流式接口返回：……”并有文本内容。
+   此命令不打印 API Key。常见错误：401 密钥无效；402 余额不足；
+   404 接口或模型不可用；429 限流；400 参数与模型不兼容。
+   test-api 通过也不等于麦克风、语音识别和扬声器链路已通过验证。
+
+五、下载识别模型并启动后台
+
+1. 下载并校验 SenseVoiceSmall 权重：
+
+   python backend/manage.py download-model
+
+   成功后文件应在：backend/models/SenseVoiceSmall/model.pt
+   下载体积较大，脚本会在下载完成后检查 SHA-256，再替换目标文件。
+   SHA-256 与交付当天官方模型服务返回的 X-Linked-Etag 对齐：
+   833ca2dcfdf8ec91bd4f31cfac36d6124e0c459074d5e909aec9cabe6204a3ea
+
+   若需手动下载：
+   https://modelscope.cn/models/iic/SenseVoiceSmall/resolve/master/model.pt
+   下载后放到上述路径，并核对 SHA-256。Windows 可使用：
+   Get-FileHash -Algorithm SHA256 .\backend\models\SenseVoiceSmall\model.pt
+   Linux 可使用：
+   sha256sum backend/models/SenseVoiceSmall/model.pt
+
+   大型模型权重没有包含在交付压缩包中。模型的配置、分词文件和 VAD 资源已随源码提供。
+   如果上游更新 master 导致哈希不同，请先核对来源与版本，不要盲目绕过校验。
+
+2. 完整离线检查：
+
+   python backend/manage.py check
+
+   该命令检查配置和模型文件是否存在；手动下载文件的哈希仍需按上一步核对。
+
+3. 检查 Docker Compose，再构建并启动：
+
+   docker compose -f backend/docker-compose.yml config --quiet
+   docker compose -f backend/docker-compose.yml up -d --build
+   docker compose -f backend/docker-compose.yml logs -f --tail 100
+
+   第一次构建需拉取固定版本的基础镜像，可能较慢。
+   Dockerfile 从本地 backend/upstream 复制后台源码，真实密钥配置不进入镜像构建上下文。
+   运行时将 backend/data 挂载到容器，模型权重单独只读挂载。
+   模型文件缺失时 Compose 会拒绝挂载，避免把文件路径误建成目录。
+   启动命令也会检查占位符和模型，检查未通过时不会启动应用。
+
+4. 查看运行状态：
+
+   docker compose -f backend/docker-compose.yml ps
+
+   首次载入模型可能需要等待。healthcheck 检查 OTA HTTP 服务可访问性；
+   它不检查 DeepSeek 账号额度，也不代表语音链路已验证。
+
+5. 用同一局域网内的手机或电脑打开：
+
+   http://192.168.1.100:8003/xiaozhi/ota/
+
+   应看到 OTA 接口正常信息，其中 WebSocket 地址应为服务器局域网 IP，
+   不应出现 YOUR_SERVER_IP、localhost 或容器内部 IP。
+   如不通，检查容器日志、网络隔离和主机防火墙。设备需要访问 TCP 8000、8003。
+   此地址是接口，不是后台管理网页；ws:// 地址也不能按普通网页打开。
+
+六、让 ESP32 连接新后台
+
+方式 A：已有固件支持自定义 OTA 地址时，无需为了换后台重新编译。
+
+1. 按所用板卡文档进入 Wi-Fi 配网模式，一般可在启动阶段按 BOOT。
+2. 手机连接设备创建的 Xiaozhi-XXXX 热点，打开 http://192.168.4.1。
+3. 在“高级 / Advanced”页面填写：
+   http://192.168.1.100:8003/xiaozhi/ota/
+4. 保存配置，让设备连接能访问后台服务器的 Wi-Fi，重启设备。
+5. 后台 OTA 会下发自建 WebSocket 地址、空 token 和 version: 1。
+   不需要到官方 xiaozhi.me 控制台输入激活码，也不需要把密钥写到设备。
+
+不同板卡进入配网的按键方式可能不同；如果固件没有此设置入口，使用方式 B。
+4G 设备通常不能直接访问家中私有局域网地址，本交付默认针对局域网互通设备。
+
+方式 B：从本项目编译烧录。
+
+1. 必须使用 ESP-IDF >= 6.0.1，推荐 release/v6.1 分支；ESP-IDF 5.x 不支持此源码。
+2. 先执行第四节 configure 命令，再从开发板文档确认自己的板型和变体。
+   列出板型：python scripts/build.py --list-boards
+3. 如果项目已生成 sdkconfig：
+   idf.py menuconfig
+   进入 Xiaozhi Assistant → Default OTA URL，明确改为自己的后台 OTA 地址。
+   main/Kconfig.projbuild 的默认值不会自动覆盖 sdkconfig 已保存的值。
+4. 使用项目标准构建入口，下面的名称必须替换为你的真实板型和变体：
+   python scripts/build.py <board-directory> --name <variant-name>
+5. 按相应板卡说明烧录。不要把不匹配的板型固件烧进设备。
+
+特别注意配置优先级：
+  设备 NVS 中 wifi/ota_url > 编译时 sdkconfig 的 CONFIG_OTA_URL > Kconfig 默认值。
+所以只修改源码默认值或重新编译，不一定能覆盖设备以前存储的官方 OTA 地址。
+优先在配网页更新设备上的 OTA 地址，通常无需擦除整片 Flash。
+本版本后台会明确下发 WebSocket version: 1，以覆盖设备残留的旧音频协议版本。
+
+七、后续修改、排查和数据位置
+
+- 修改 API Key、模型或音色后，重启容器使配置生效：
+  docker compose -f backend/docker-compose.yml restart
+- 停止后台：
+  docker compose -f backend/docker-compose.yml down
+  宿主机 backend/data 和模型文件仍会保留。
+- 修改后台源码或 manage.py 后需要重新执行 up -d --build。
+- 角色设定：backend/data/.config.yaml 的 prompt。
+- 音色：同文件 TTS.EdgeTTS.voice；默认 zh-CN-XiaoxiaoNeural。
+- 文本模型：同文件 LLM.DeepSeekLLM.model_name。
+- 此部署默认使用 DeepSeek 处理对话与设备工具调用，不另开其他厂商的 LLM。
+  摄像头视觉识别未启用；需要视觉时应单独选择兼容模型和服务。
+- ASR 是本地模型，无须额外 ASR 密钥；EdgeTTS 默认无需另外填写密钥，
+  但它依赖外部网络和服务可用性，出现无声音时请先看 TTS 日志。
+- 对话失败：先运行 test-api，再看容器日志是否有鉴权、额度或模型错误。
+- 能识别文字但不出声：检查 EdgeTTS 网络、音频输出、音量和扬声器接线。
+- 设备显示激活码或仍连官方服务器：检查设备 NVS 的 OTA 地址是否已经更新。
+- 停在“检查新版本”：先确认 OTA 地址和 8003 端口从设备网络可以访问。
+- 配置修改没有生效：检查改的是 backend/data/.config.yaml，且已重启容器。
+  不要启用 manager-api.url，否则上游会改为从另一套管理服务读取模型设置。
+- 后台运行日志和临时音频主要在容器 tmp/；data/ 是持久化数据。
+  delete_audio: true 用于处理后清理临时音频，日志仍可能包含识别文本和对话内容。
+- 当前采用上游局域网部署的无鉴权配置。不要直接将 8000/8003 暴露到公网。
+  公网接入需另外配置 HTTPS/WSS、访问控制和设备授权。
+
+八、文件修改清单与来源
+
+原项目修改：
+  main/Kconfig.projbuild
+    OTA 默认入口改为自建后台占位地址，添加密钥存放位置与覆盖优先级提示。
+  README_zh.md
+    添加本交付的说明入口。
+  .gitignore
+    忽略真实密钥配置、下载权重和运行临时文件。
+
+新增部署文件：
+  backend/data/.config.yaml       真正运行配置；用户在这里填写密钥。
+  backend/config.example.yaml    带占位符的恢复模板。
+  backend/docker-compose.yml     WebSocket 8000、OTA HTTP 8003、持久化挂载及健康检查。
+  backend/Dockerfile             固定基础镜像，使用随包源码构建。
+  backend/.dockerignore          仅允许构建必需源码进入上下文，排除密钥。
+  backend/manage.py              地址同步、离线检查、流式 API 检查和模型下载校验。
+  backend/requirements-tools.txt 配置工具依赖。
+  backend/tests/test_deployment.py 部署和关键适配链路的主机测试。
+  backend/upstream-version.json  后台源码提交、来源压缩包 SHA-256、镜像摘要和模型摘要。
+  backend/upstream/              自建小智 Python 后台源码、默认配置和已有小模型资源。
+  docs/deepseek_setup_zh.txt      本完整说明。
+  docs/deepseek_validation.txt   本次实际验证记录和未验证项目。
+
+第三方后台来源：
+  https://github.com/xinnan-tech/xiaozhi-esp32-server
+  固定提交：4f6e9ec6b1169ac6f3dbd78b5d8b1f717e493b9b
+  从该提交提取 main/xiaozhi-server 子目录，保留 MIT LICENSE。
+  对其 core/api/ota_handler.py 增加 websocket.version: 1，兼容旧设备配置迁移。
+  其余后台源码保持来源版本内容；业务选择通过本地覆盖配置实现。
+  基础容器镜像已按 digest 固定，见 Dockerfile，不跟随 latest 自动变化。
+  原固件的 LICENSE 仍保留在项目根目录。
+
+参考资料：
+  DeepSeek 官方 API：https://api-docs.deepseek.com/
+  DeepSeek 当前模型：https://api-docs.deepseek.com/quick_start/pricing
+  上游部署说明：https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/4f6e9ec6b1169ac6f3dbd78b5d8b1f717e493b9b/docs/Deployment.md
+
+按第四至六节完成配置、启动和设备连接后，再进行一次实际唤醒、提问、播报、
+打断、重连及调音量验证，才能确认你这块硬件上的完整语音链路正常。

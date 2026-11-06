@@ -1,0 +1,9 @@
+# 小智固件 v2.5.3 (bread-compact-wifi / ESP32-S3 / 16MB) - 2026-11-06 13:02:40
+# ESP-IDF: v6.1 | 语言: zh-CN | OTA: http://192.168.10.200:8003/xiaozhi/ota/
+b35c15e58a62da3610a14106c9e6d0b697da60cd5c3be60f3acf6effb0f2e277  bootloader.bin
+4811619cacae08ef2e0e71b7220c6033a346ca5da7ca179082408c963ef530b5  partition-table.bin
+7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f  ota_data_initial.bin
+0d7744cb3ba98660ec14eaf134ac1d2b7c6c494ade7c1529a15fb437edd0c4ac  xiaozhi.bin
+7ff21de6be01766fb96efa2ae404cb28f93b9f779c5e4318df6286d1d4e2faa2  generated_assets.bin
+c118acc2eaf8ebfdcf832c8d5a84f4bd3f1ea7ecaca922f8d4585ed27465d87f  merged-binary.bin
+d97df35d5ac34dcb005d6e0b40ee03a75593b544b10421b96f783eb6dadd98f7  v2.5.3_bread-compact-wifi.zip
