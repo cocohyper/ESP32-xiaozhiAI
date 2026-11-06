@@ -24,3 +24,4 @@ device/dependencies.lock
 backend/data/
 backend/models/
 backend/upstream/tmp/
+archive/
