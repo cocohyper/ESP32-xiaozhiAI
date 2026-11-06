@@ -18,6 +18,8 @@
 #include <freertos/task.h>
 #include <cJSON.h>
 
+#include "settings.h"
+
 #include <ssid_manager.h>
 #include <wifi_manager.h>
 
@@ -60,6 +62,10 @@ void HandleStatus() {
     cJSON_AddStringToObject(root, "ip", wifi.GetIpAddress().c_str());
     cJSON_AddNumberToObject(root, "rssi", wifi.GetRssi());
     cJSON_AddStringToObject(root, "ap_ssid", wifi.GetApSsid().c_str());
+
+    Settings wifi_settings("wifi", false);
+    cJSON_AddBoolToObject(root, "token_set",
+                          !wifi_settings.GetString("console_token").empty());
 
     cJSON* saved = cJSON_CreateArray();
     for (const auto& item : SsidManager::GetInstance().GetSsidList()) {
@@ -190,6 +196,27 @@ void HandleSet(const std::string& payload) {
     }
 }
 
+void HandleToken(const std::string& token) {
+    if (token.size() < 8 || token.size() > 128) {
+        SendLine("WIFICFG:ERR:token_length");
+        return;
+    }
+    for (char c : token) {
+        const bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                        (c >= 'A' && c <= 'Z') || c == '-' || c == '_';
+        if (!ok) {
+            SendLine("WIFICFG:ERR:token_charset");
+            return;
+        }
+    }
+    Settings settings("wifi", true);
+    settings.SetString("console_token", token);
+    SendLine("WIFICFG:TOKEN_OK");
+    ESP_LOGI(TAG, "Console device token saved, rebooting to apply");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+}
+
 void HandleReset() {
     SsidManager::GetInstance().Clear();
     SendLine("WIFICFG:RESET_OK");
@@ -223,10 +250,12 @@ void ProcessLine(const std::string& input) {
         HandleScan();
     } else if (command == "SET") {
         HandleSet(payload);
+    } else if (command == "TOKEN") {
+        HandleToken(payload);
     } else if (command == "RESET") {
         HandleReset();
     } else if (command == "HELP") {
-        SendLine("WIFICFG:HELP:PING|STATUS|SCAN|SET:<json>|RESET");
+        SendLine("WIFICFG:HELP:PING|STATUS|SCAN|SET:<json>|TOKEN:<token>|RESET");
     } else {
         SendLine("WIFICFG:ERR:unknown_command");
     }
