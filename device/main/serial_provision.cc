@@ -1,5 +1,9 @@
 #include "serial_provision.h"
 
+// sdkconfig.h must be included before testing CONFIG_* macros
+// (ESP-IDF does not force-include it for this component).
+#include "sdkconfig.h"
+
 #ifdef CONFIG_SERIAL_PROVISION_ENABLED
 
 #include <algorithm>
